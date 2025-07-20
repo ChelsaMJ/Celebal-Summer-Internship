@@ -1,46 +1,78 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
+import pickle
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-import plotly.express as px
+from sklearn.preprocessing import LabelEncoder
+import matplotlib.pyplot as plt
 
-# Generate synthetic data
-def generate_house_data(n_samples=100):
-    np.random.seed(42)
-    size = np.random.normal(1500, 500, n_samples)
-    price = size * 100 + np.random.normal(0, 10000, n_samples)
-    return pd.DataFrame({'size_sqft': size, 'price': price})
+# Load dataset (you can replace with real data from Kaggle or CSV)
+@st.cache_data
+def load_data():
+    # Sample dataset - replace with actual CSV read
+    df = pd.DataFrame({
+        'year': np.random.randint(2000, 2023, 100),
+        'km_driven': np.random.randint(10000, 200000, 100),
+        'fuel': np.random.choice(['Petrol', 'Diesel', 'CNG'], 100),
+        'seller_type': np.random.choice(['Dealer', 'Individual'], 100),
+        'transmission': np.random.choice(['Manual', 'Automatic'], 100),
+        'price': np.random.randint(100000, 1000000, 100)
+    })
+    return df
 
-# Train linear regression model
-def train_model():
-    df = generate_house_data()
-    X = df[['size_sqft']]
-    y = df['price']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = LinearRegression()
-    model.fit(X_train, y_train)
+# Train model
+@st.cache_resource
+def train_model(df):
+    df_encoded = df.copy()
+    for col in ['fuel', 'seller_type', 'transmission']:
+        le = LabelEncoder()
+        df_encoded[col] = le.fit_transform(df[col])
+
+    X = df_encoded.drop('price', axis=1)
+    y = df_encoded['price']
+    model = RandomForestRegressor()
+    model.fit(X, y)
     return model
 
-# Streamlit UI
+# App interface
 def main():
-    st.title('🏠 House Price Predictor')
-    st.write("Enter the size of the house to estimate its price:")
+    st.title("🚗 Car Price Estimator")
+    df = load_data()
+    model = train_model(df)
 
-    model = train_model()
+    st.sidebar.header("Enter Car Details")
+    year = st.sidebar.slider('Year of Purchase', 2000, 2022, 2015)
+    km_driven = st.sidebar.number_input('Kilometers Driven', min_value=0, value=50000)
+    fuel = st.sidebar.selectbox('Fuel Type', ['Petrol', 'Diesel', 'CNG'])
+    seller_type = st.sidebar.selectbox('Seller Type', ['Dealer', 'Individual'])
+    transmission = st.sidebar.selectbox('Transmission', ['Manual', 'Automatic'])
 
-    size = st.number_input('House Size (sqft)', min_value=500, max_value=5000, value=1500)
+    # Encode input
+    input_df = pd.DataFrame({
+        'year': [year],
+        'km_driven': [km_driven],
+        'fuel': [fuel],
+        'seller_type': [seller_type],
+        'transmission': [transmission]
+    })
+
+    for col in ['fuel', 'seller_type', 'transmission']:
+        le = LabelEncoder()
+        le.fit(df[col])
+        input_df[col] = le.transform(input_df[col])
 
     if st.button('Predict Price'):
-        prediction = model.predict([[size]])
-        st.success(f'Estimated Price: ${prediction[0]:,.2f}')
+        prediction = model.predict(input_df)
+        st.success(f"Estimated Car Price: ₹{int(prediction[0]):,}")
 
-        df = generate_house_data()
-        fig = px.scatter(df, x='size_sqft', y='price', title='House Size vs Price')
-        fig.add_scatter(x=[size], y=[prediction[0]], mode='markers',
-                        marker=dict(color='red', size=12), name='Prediction')
-        st.plotly_chart(fig)
+        # Feature Importance
+        st.subheader("Feature Importance")
+        feat_imp = model.feature_importances_
+        feat_names = input_df.columns
+        fig, ax = plt.subplots()
+        ax.barh(feat_names, feat_imp, color='skyblue')
+        st.pyplot(fig)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
