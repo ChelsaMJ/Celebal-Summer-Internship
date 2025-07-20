@@ -1,72 +1,76 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pickle
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-import matplotlib.pyplot as plt
 
 @st.cache_data
 def load_data():
-    # Sample dataset - replace with actual CSV read
-    df = pd.DataFrame({
-        'year': np.random.randint(2000, 2023, 100),
-        'km_driven': np.random.randint(10000, 200000, 100),
-        'fuel': np.random.choice(['Petrol', 'Diesel', 'CNG'], 100),
-        'seller_type': np.random.choice(['Dealer', 'Individual'], 100),
-        'transmission': np.random.choice(['Manual', 'Automatic'], 100),
-        'price': np.random.randint(100000, 1000000, 100)
-    })
+    df = pd.read_csv("CarPrice.csv")
     return df
 
-@st.cache_resource
-def train_model(df):
-    df_encoded = df.copy()
-    for col in ['fuel', 'seller_type', 'transmission']:
+def preprocess_data(df):
+    features = ['fueltype', 'aspiration', 'carbody', 'drivewheel', 'enginesize', 'horsepower', 'citympg', 'highwaympg']
+    df = df[features + ['price']].dropna()
+    
+    label_cols = ['fueltype', 'aspiration', 'carbody', 'drivewheel']
+    encoders = {}
+    
+    for col in label_cols:
         le = LabelEncoder()
-        df_encoded[col] = le.fit_transform(df[col])
+        df[col] = le.fit_transform(df[col])
+        encoders[col] = le
+    
+    X = df.drop('price', axis=1)
+    y = df['price']
+    return X, y, encoders
 
-    X = df_encoded.drop('price', axis=1)
-    y = df_encoded['price']
-    model = RandomForestRegressor()
+@st.cache_resource
+def train_model(X, y):
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
     return model
 
 def main():
-    st.title("🚗 Car Price Estimator")
+    st.title("🚗 Car Price Predictor App")
+    st.markdown("Estimate car price based on specifications using a trained machine learning model.")
+
     df = load_data()
-    model = train_model(df)
+    X, y, encoders = preprocess_data(df)
+    model = train_model(X, y)
 
-    st.sidebar.header("Enter Car Details")
-    year = st.sidebar.slider('Year of Purchase', 2000, 2022, 2015)
-    km_driven = st.sidebar.number_input('Kilometers Driven', min_value=0, value=50000)
-    fuel = st.sidebar.selectbox('Fuel Type', ['Petrol', 'Diesel', 'CNG'])
-    seller_type = st.sidebar.selectbox('Seller Type', ['Dealer', 'Individual'])
-    transmission = st.sidebar.selectbox('Transmission', ['Manual', 'Automatic'])
+    st.sidebar.header("Enter Car Features")
 
-    input_df = pd.DataFrame({
-        'year': [year],
-        'km_driven': [km_driven],
-        'fuel': [fuel],
-        'seller_type': [seller_type],
-        'transmission': [transmission]
-    })
+    fueltype = st.sidebar.selectbox("Fuel Type", encoders['fueltype'].classes_)
+    aspiration = st.sidebar.selectbox("Aspiration", encoders['aspiration'].classes_)
+    carbody = st.sidebar.selectbox("Car Body", encoders['carbody'].classes_)
+    drivewheel = st.sidebar.selectbox("Drive Wheel", encoders['drivewheel'].classes_)
+    enginesize = st.sidebar.slider("Engine Size", 50, 400, 150)
+    horsepower = st.sidebar.slider("Horsepower", 50, 300, 100)
+    citympg = st.sidebar.slider("City MPG", 5, 60, 25)
+    highwaympg = st.sidebar.slider("Highway MPG", 5, 60, 30)
 
-    for col in ['fuel', 'seller_type', 'transmission']:
-        le = LabelEncoder()
-        le.fit(df[col])
-        input_df[col] = le.transform(input_df[col])
+    input_data = pd.DataFrame([{
+        'fueltype': encoders['fueltype'].transform([fueltype])[0],
+        'aspiration': encoders['aspiration'].transform([aspiration])[0],
+        'carbody': encoders['carbody'].transform([carbody])[0],
+        'drivewheel': encoders['drivewheel'].transform([drivewheel])[0],
+        'enginesize': enginesize,
+        'horsepower': horsepower,
+        'citympg': citympg,
+        'highwaympg': highwaympg
+    }])
 
-    if st.button('Predict Price'):
-        prediction = model.predict(input_df)
-        st.success(f"Estimated Car Price: ₹{int(prediction[0]):,}")
+    if st.button("Predict Price"):
+        prediction = model.predict(input_data)[0]
+        st.success(f"Estimated Car Price: ${int(prediction):,}")
 
-        st.subheader("Feature Importance")
-        feat_imp = model.feature_importances_
-        feat_names = input_df.columns
+        st.subheader("🔍 Feature Importance")
+        importance = pd.Series(model.feature_importances_, index=X.columns)
         fig, ax = plt.subplots()
-        ax.barh(feat_names, feat_imp, color='skyblue')
+        importance.sort_values().plot(kind='barh', color='teal', ax=ax)
         st.pyplot(fig)
 
 if __name__ == "__main__":
