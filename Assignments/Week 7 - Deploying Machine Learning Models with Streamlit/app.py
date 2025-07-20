@@ -7,7 +7,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import matplotlib.pyplot as plt
 
-# Load dataset (you can replace with real data from Kaggle or CSV)
 @st.cache_data
 def load_data():
     # Sample dataset - replace with actual CSV read
@@ -21,7 +20,6 @@ def load_data():
     })
     return df
 
-# Train model
 @st.cache_resource
 def train_model(df):
     df_encoded = df.copy()
@@ -35,7 +33,6 @@ def train_model(df):
     model.fit(X, y)
     return model
 
-# App interface
 def main():
     st.title("🚗 Car Price Estimator")
     df = load_data()
@@ -48,7 +45,6 @@ def main():
     seller_type = st.sidebar.selectbox('Seller Type', ['Dealer', 'Individual'])
     transmission = st.sidebar.selectbox('Transmission', ['Manual', 'Automatic'])
 
-    # Encode input
     input_df = pd.DataFrame({
         'year': [year],
         'km_driven': [km_driven],
@@ -66,7 +62,6 @@ def main():
         prediction = model.predict(input_df)
         st.success(f"Estimated Car Price: ₹{int(prediction[0]):,}")
 
-        # Feature Importance
         st.subheader("Feature Importance")
         feat_imp = model.feature_importances_
         feat_names = input_df.columns
